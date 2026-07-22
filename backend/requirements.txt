@@ -1,0 +1,7 @@
+azure-functions
+fastapi
+azurefunctions-extensions-http-fastapi
+azure-ai-projects
+azure-identity
+aiohttp
+python-multipart
