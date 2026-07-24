@@ -21,6 +21,28 @@
       "code_files": [],
       "created_at": "2026-07-24T18:16:59.954650+00:00",
       "updated_at": "2026-07-24T18:16:59.954650+00:00"
+    },
+    "e9149c41-372b-42f4-a290-e2fb6e4f1ec5": {
+      "agent_id": "e9149c41-372b-42f4-a290-e2fb6e4f1ec5",
+      "display_name": "Agente de test 2",
+      "agent_name": "Agente-de-test-2-7315d99bc90c",
+      "agent_version": "1",
+      "vector_store_id": "vs_LDj33Dzm20KolTdUaZq2HupR",
+      "vector_store_ids": [
+        "vs_LDj33Dzm20KolTdUaZq2HupR"
+      ],
+      "model": "gpt-chat-latest",
+      "instructions": "Eres un asistente util. Usa los archivos cargados cuando la pregunta dependa de documentos y usa Python cuando necesites calcular o analizar datos.\n\nCapacidades disponibles:\n- Usa File Search cuando la pregunta dependa de documentos, archivos, manuales, politicas, contratos, datos cargados o conocimiento privado del usuario.\n- Usa Code Interpreter cuando necesites ejecutar Python para calculos, analisis de datos, transformaciones, tablas, graficos, validaciones o razonamiento numerico.\n- Si el usuario pide crear, generar o descargar un archivo, usa Code Interpreter para escribir el archivo real en /mnt/data. No simules enlaces sandbox ni digas que un archivo fue creado si no lo escribiste con la herramienta.\n- Si la pregunta se responde con conocimiento general y no requiere archivos ni calculos, responde directamente.\nSi el mensaje incluye una imagen, analízala directamente con tu capacidad de visión; nunca uses code interpreter ni file search para interpretar imágenes.",
+      "description": "Agente con Code Interpreter y File Search creado desde el backend.",
+      "tools": {
+        "code_interpreter": true,
+        "file_search": true
+      },
+      "supports_unified_upload": true,
+      "files": [],
+      "code_files": [],
+      "created_at": "2026-07-24T23:31:48.739464+00:00",
+      "updated_at": "2026-07-24T23:31:48.739464+00:00"
     }
   },
   "threads": {
@@ -178,6 +200,32 @@
       ],
       "created_at": "2026-07-24T18:42:13.162383+00:00",
       "updated_at": "2026-07-24T18:44:04.212419+00:00"
+    },
+    "conv_61fb06980d534bb200FgBzfCWc6uMevFHdGtlCzqlrmGkwgzru": {
+      "thread_id": "conv_61fb06980d534bb200FgBzfCWc6uMevFHdGtlCzqlrmGkwgzru",
+      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
+      "agent_name": "AgenteTest-2f41711f623c",
+      "agent_version": "1",
+      "vector_store_id": "vs_92zWIK3DBXevneSukOLpyqz6",
+      "files": [
+        {
+          "upload_id": "7198ece63a01410b8c3fb440c6f9e054",
+          "file_id": "assistant-69rqxf8NVoqzPjqZi3uzri",
+          "vector_store_id": "vs_92zWIK3DBXevneSukOLpyqz6",
+          "filename": "DocumentoTest2.pdf",
+          "content_type": "application/pdf",
+          "bytes": 50140,
+          "status": "completed",
+          "route": "file_search",
+          "destination": "file_search",
+          "tool": "file_search",
+          "created_at": "2026-07-24T23:31:12.842224+00:00"
+        }
+      ],
+      "code_files": [],
+      "images": [],
+      "created_at": "2026-07-24T23:31:05.272200+00:00",
+      "updated_at": "2026-07-24T23:31:12.842224+00:00"
     }
   },
   "invocations": {}
