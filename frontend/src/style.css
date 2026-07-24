@@ -571,6 +571,24 @@ code {
   white-space: nowrap;
 }
 
+.resource-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto;
+  height: auto;
+  min-height: 58px;
+  align-items: center;
+  padding: 8px 10px;
+}
+
+.resource-row small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .upload-divider {
   height: 1px;
   margin: 4px 0;

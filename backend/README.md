@@ -57,6 +57,7 @@ Define todos los endpoints HTTP:
 GET  /agents
 POST /agents
 GET  /chat-stream
+POST /upload-and-ask
 POST /agents/{agent_id}/files
 POST /agents/{agent_id}/code-files
 GET  /generated-files/{container_id}/{file_id}
@@ -80,25 +81,13 @@ Para personas no tecnicas: cada endpoint es una puerta de entrada. Por ejemplo, 
 
 ### Credenciales
 
-La funcion `_get_credential()` decide como autenticarse:
-
-```python
-ENTORNO = "local"
-```
-
-Si `ENTORNO == "local"` usa:
-
-```python
-AzureCliCredential()
-```
-
-Si `ENTORNO != "local"` usa:
+La funcion `_get_credential()` crea una credencial por request:
 
 ```python
 DefaultAzureCredential()
 ```
 
-En local necesitas:
+En local puedes autenticarte con:
 
 ```bash
 az login
@@ -106,7 +95,7 @@ az login
 
 Cada request crea su credencial y la cierra al final para evitar fugas de recursos async.
 
-Para personas no tecnicas: las credenciales son la forma en la que el backend demuestra a Azure que tiene permiso para usar el proyecto Foundry. En local se usa tu sesion de `az login`; en nube se recomienda identidad administrada.
+Para personas no tecnicas: las credenciales son la forma en la que el backend demuestra a Azure que tiene permiso para usar el proyecto Foundry. En local `DefaultAzureCredential` puede usar tu sesion de `az login`; en nube usa identidad administrada si esta habilitada.
 
 ### Cliente Foundry
 
@@ -172,13 +161,15 @@ Para personas no tecnicas: SSE permite que la respuesta aparezca poco a poco en 
 Valores principales en `function_app.py`:
 
 ```python
-ENTORNO = "local"
-FOUNDRY_ENDPOINT = "https://...services.ai.azure.com/api/projects/..."
+ENTORNO = os.getenv("ENTORNO", "local")
+FOUNDRY_ENDPOINT = os.getenv("FOUNDRY_ENDPOINT", "https://...")
 ```
 
 Variables opcionales:
 
 ```text
+ENTORNO=local
+FOUNDRY_ENDPOINT=https://...services.ai.azure.com/api/projects/...
 ALLOWED_ORIGIN=http://localhost:5173
 AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-5-mini
 MODEL_DEPLOYMENT_NAME=gpt-5-mini
@@ -190,13 +181,14 @@ AZURE_AI_AUTO_RESOLVE_AGENT_VERSION=true|false
 
 ### Que Cambiar entre Local y Nube
 
-Para trabajar localmente:
+Para trabajar localmente normalmente basta con:
 
-```python
-ENTORNO = "local"
+```bash
+az login
+func start
 ```
 
-Y normalmente:
+Y configurar:
 
 ```text
 ALLOWED_ORIGIN=http://localhost:5173
@@ -204,8 +196,8 @@ ALLOWED_ORIGIN=http://localhost:5173
 
 Para desplegar en Azure:
 
-```python
-ENTORNO = "nube"
+```text
+ENTORNO=nube
 ```
 
 Y configurar:
@@ -222,27 +214,15 @@ Tambien se debe revisar `FOUNDRY_ENDPOINT`, que debe apuntar al proyecto correct
 
 Esta seccion resume que hay que cambiar antes de publicar el backend.
 
-### 1. Cambiar Autenticacion
+### 1. Configurar Autenticacion
 
-Actualmente:
-
-```python
-ENTORNO = "local"
-```
-
-Para produccion:
-
-```python
-ENTORNO = "nube"
-```
-
-Esto hace que el backend use:
+El backend usa:
 
 ```python
 DefaultAzureCredential()
 ```
 
-Recomendacion: habilitar Managed Identity en la Azure Function y darle permisos sobre el proyecto Foundry.
+Para produccion, habilitar Managed Identity en la Azure Function y darle permisos sobre el proyecto Foundry. En local, `az login` es suficiente si tu usuario tiene acceso al proyecto.
 
 ### 2. Cambiar CORS
 
@@ -265,16 +245,10 @@ Si esto queda mal, el navegador mostrara errores como `Failed to fetch` o bloque
 El valor:
 
 ```python
-FOUNDRY_ENDPOINT = "https://...services.ai.azure.com/api/projects/..."
+FOUNDRY_ENDPOINT = os.getenv("FOUNDRY_ENDPOINT", "https://...")
 ```
 
-debe apuntar al proyecto correcto. Si se despliega a otro ambiente, por ejemplo desarrollo, QA o produccion, lo ideal es moverlo a variable de entorno.
-
-Recomendacion para produccion:
-
-```python
-FOUNDRY_ENDPOINT = os.getenv("FOUNDRY_ENDPOINT", "")
-```
+debe apuntar al proyecto correcto. En produccion, configura `FOUNDRY_ENDPOINT` como variable de entorno para evitar depender del fallback local.
 
 ### 4. Configurar Modelo
 
@@ -848,6 +822,63 @@ Backend -> responses.create(stream=True, agent_reference=name/version)
 Backend -> SSE deltas
 Frontend <- texto, metadata, artifacts, errores
 ```
+
+### `POST /upload-and-ask`
+
+Subida unificada tipo ChatGPT: el frontend envia la pregunta y cero, uno o varios archivos en un solo `multipart/form-data`. El backend decide automaticamente el destino:
+
+- Imagenes (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`): no se suben a tools; se convierten a data URI base64 y se envian como `input_image`.
+- Datos tabulares (`.csv`, `.xlsx`, `.json`, `.tsv`): se suben con Files API (`purpose="assistants"`) y se pasan a Code Interpreter con `structured_inputs`.
+- Documentos (`.pdf`, `.docx`, `.txt`, `.md`, `.pptx`): se suben al vector store asociado al `thread_id` local para File Search.
+- Otros tipos devuelven `415`.
+
+Campos:
+
+```text
+message=<pregunta>       requerido
+file=<archivo>           opcional, repetible
+thread_id=<id>           opcional; si falta, el backend crea conversacion y lo devuelve
+agent_id=<id local>      recomendado para que el backend pueda refrescar el agente con placeholders
+agent_name=<nombre>      opcional si no usas agent_id
+agent_version=<version>  opcional si no usas agent_id
+```
+
+Respuesta del `POST`: JSON `202` con `invocation_id`, `thread_id`, contexto de archivos y `stream_url`.
+
+```json
+{
+  "invocation_id": "uuid",
+  "thread_id": "conv_...",
+  "stream_url": "http://localhost:7071/upload-and-ask-stream/uuid",
+  "archivos_subidos": [],
+  "archivos_thread": []
+}
+```
+
+Luego el frontend abre `GET /upload-and-ask-stream/{invocation_id}` con `EventSource`.
+Respuesta del stream: `text/event-stream`. Eventos principales:
+
+```text
+event: metadata
+data: {"thread_id":"conv_...","agent":"...","version":"...","archivos_subidos":[],"archivos_thread":[]}
+
+data: delta de texto del agente
+
+event: uploaded-files
+data: {"archivos_subidos":[...],"archivos_thread":[...]}
+
+event: artifact
+data: {"filename":"grafica.png","download_url":"..."}
+
+event: done
+data: {"thread_id":"conv_...","run_id":"resp_...","archivos_subidos":[],"archivos_thread":[]}
+
+data: [FIN]
+```
+
+`archivos_subidos` contiene solo los archivos enviados en esa llamada. `archivos_thread` contiene todos los recursos acumulados en la sesion. Para imagenes, `file_id` es `null` porque no se suben a ninguna herramienta; el frontend puede usar `upload_id` como identificador local.
+
+La ruta guarda en `agents_db.json` una seccion `threads` con el vector store, archivos de Code Interpreter e imagenes asociadas al thread para que las siguientes preguntas puedan reutilizarlos.
 
 ### Descargar archivo generado
 

@@ -1,7 +1,7 @@
 azure-functions
 fastapi
 azurefunctions-extensions-http-fastapi
-azure-ai-projects
-azure-identity
+azure-ai-projects>=2.0.0
+azure-identity>=1.17.0
 aiohttp
 python-multipart

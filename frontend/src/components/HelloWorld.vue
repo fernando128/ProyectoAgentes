@@ -30,6 +30,21 @@ interface GeneratedArtifact {
   download_url: string
 }
 
+interface UploadedResource {
+  id: string
+  upload_id?: string | null
+  file_id?: string | null
+  filename: string
+  content_type?: string | null
+  bytes?: number | null
+  destination: 'file_search' | 'code_interpreter' | 'vision' | string
+  tool?: string | null
+  vector_store_id?: string | null
+  status?: string | null
+  purpose?: string | null
+  created_at?: string | null
+}
+
 interface MarkdownListItem {
   content: string
   level: number
@@ -69,18 +84,13 @@ const newAgentModel = ref('')
 const isCreatingAgent = ref(false)
 const createAgentError = ref('')
 const createAgentSuccess = ref('')
-const selectedFiles = ref<File[]>([])
-const fileInput = ref<HTMLInputElement | null>(null)
-const isUploadingFiles = ref(false)
-const uploadError = ref('')
-const uploadSuccess = ref('')
-const selectedCodeFiles = ref<File[]>([])
-const codeFileInput = ref<HTMLInputElement | null>(null)
-const isUploadingCodeFiles = ref(false)
-const codeUploadError = ref('')
-const codeUploadSuccess = ref('')
+const selectedUploadFiles = ref<File[]>([])
+const uploadFileInput = ref<HTMLInputElement | null>(null)
+const threadId = ref('')
+const sessionResources = ref<UploadedResource[]>([])
 const generatedArtifacts = ref<GeneratedArtifact[]>([])
 
+let requestController: AbortController | null = null
 let source: EventSource | null = null
 
 const canAsk = computed(
@@ -88,20 +98,6 @@ const canAsk = computed(
 )
 const canCreateAgent = computed(
   () => newAgentName.value.trim().length > 0 && !isCreatingAgent.value
-)
-const canUploadFiles = computed(
-  () =>
-    !!selectedAgent.value?.agent_id &&
-    selectedFiles.value.length > 0 &&
-    !isUploadingFiles.value &&
-    !isStreaming.value
-)
-const canUploadCodeFiles = computed(
-  () =>
-    !!selectedAgent.value?.agent_id &&
-    selectedCodeFiles.value.length > 0 &&
-    !isUploadingCodeFiles.value &&
-    !isStreaming.value
 )
 const renderedAnswer = computed(() => parseMarkdown(answer.value))
 
@@ -134,6 +130,142 @@ function normalizeAgent(raw: Record<string, unknown>): AgentInfo | null {
 
 function agentKey(agent: AgentInfo) {
   return agent.agent_id || `${agent.name}:${agent.version ?? ''}`
+}
+
+function normalizeUploadedResource(raw: Record<string, unknown>): UploadedResource | null {
+  const filename = String(raw.filename ?? '').trim()
+  const destination = String(raw.destination ?? raw.route ?? raw.tool ?? '').trim()
+  const id = String(raw.id ?? raw.file_id ?? raw.upload_id ?? '').trim()
+
+  if (!filename || !destination || !id) {
+    return null
+  }
+
+  return {
+    id,
+    upload_id: raw.upload_id ? String(raw.upload_id) : null,
+    file_id: raw.file_id ? String(raw.file_id) : null,
+    filename,
+    content_type: raw.content_type ? String(raw.content_type) : null,
+    bytes: typeof raw.bytes === 'number' ? raw.bytes : null,
+    destination,
+    tool: raw.tool ? String(raw.tool) : null,
+    vector_store_id: raw.vector_store_id ? String(raw.vector_store_id) : null,
+    status: raw.status ? String(raw.status) : null,
+    purpose: raw.purpose ? String(raw.purpose) : null,
+    created_at: raw.created_at ? String(raw.created_at) : null,
+  }
+}
+
+function normalizeUploadedResources(value: unknown): UploadedResource[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((resource) => normalizeUploadedResource(resource as Record<string, unknown>))
+    .filter((resource: UploadedResource | null): resource is UploadedResource =>
+      Boolean(resource)
+    )
+}
+
+function destinationLabel(destination: string) {
+  if (destination === 'file_search') {
+    return 'File Search'
+  }
+
+  if (destination === 'code_interpreter') {
+    return 'Code Interpreter'
+  }
+
+  if (destination === 'vision') {
+    return 'Visión'
+  }
+
+  return destination
+}
+
+function formatBytes(bytes?: number | null) {
+  if (!bytes) {
+    return '0 KB'
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${Math.ceil(bytes / 1024)} KB`
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function applyUploadMetadata(data: Record<string, unknown>) {
+  if (data.thread_id) {
+    threadId.value = String(data.thread_id)
+  }
+
+  if (data.agent || data.version) {
+    agentLabel.value = `${String(data.agent ?? 'agente')}:${String(data.version ?? 's/v')}`
+  }
+
+  sessionResources.value = normalizeUploadedResources(
+    data.archivos_thread ?? data.archivos_subidos
+  )
+}
+
+function addGeneratedArtifact(artifact: GeneratedArtifact) {
+  const exists = generatedArtifacts.value.some(
+    (item) =>
+      item.container_id === artifact.container_id && item.file_id === artifact.file_id
+  )
+
+  if (!exists) {
+    generatedArtifacts.value.push(artifact)
+  }
+}
+
+function handleUploadSseEvent(eventName: string, data: string) {
+  if (data === '[FIN]') {
+    status.value = errorMessage.value ? 'Error' : 'Finalizado'
+    return
+  }
+
+  if (!eventName || eventName === 'message') {
+    answer.value += data
+    status.value = 'Respondiendo'
+    return
+  }
+
+  if (eventName === 'metadata' || eventName === 'uploaded-files' || eventName === 'done') {
+    try {
+      applyUploadMetadata(JSON.parse(data) as Record<string, unknown>)
+    } catch {
+      console.warn(`No se pudo leer el evento ${eventName}.`)
+    }
+
+    if (eventName === 'metadata') {
+      status.value = 'Pensando'
+    }
+
+    if (eventName === 'done') {
+      status.value = 'Finalizado'
+    }
+
+    return
+  }
+
+  if (eventName === 'artifact') {
+    try {
+      addGeneratedArtifact(JSON.parse(data) as GeneratedArtifact)
+    } catch {
+      console.warn('No se pudo leer el artifact del stream.')
+    }
+
+    return
+  }
+
+  if (eventName === 'agent-error') {
+    errorMessage.value = data
+    status.value = 'Error'
+  }
 }
 
 function escapeHtml(value: string) {
@@ -453,17 +585,24 @@ async function fetchAgents() {
 }
 
 function selectAgent(agent: AgentInfo) {
+  const previousKey = selectedAgent.value ? agentKey(selectedAgent.value) : ''
+  const nextKey = agentKey(agent)
   selectedAgent.value = agent
   agentLabel.value = `${agent.display_name || agent.name}:${agent.version ?? 's/v'}`
-  uploadError.value = ''
-  uploadSuccess.value = ''
-  codeUploadError.value = ''
-  codeUploadSuccess.value = ''
+
+  if (previousKey && previousKey !== nextKey) {
+    threadId.value = ''
+    answer.value = ''
+    sessionResources.value = []
+    generatedArtifacts.value = []
+  }
 }
 
 function closeStream(finalStatus = 'Finalizado') {
   source?.close()
   source = null
+  requestController?.abort()
+  requestController = null
   isStreaming.value = false
   status.value = finalStatus
 }
@@ -522,120 +661,13 @@ async function createAgent() {
   }
 }
 
-function onFilesChange(event: Event) {
+function onUnifiedFilesChange(event: Event) {
   const input = event.target as HTMLInputElement
-  selectedFiles.value = Array.from(input.files ?? [])
-  uploadError.value = ''
-  uploadSuccess.value = ''
+  selectedUploadFiles.value = Array.from(input.files ?? [])
+  errorMessage.value = ''
 }
 
-function onCodeFilesChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  selectedCodeFiles.value = Array.from(input.files ?? [])
-  codeUploadError.value = ''
-  codeUploadSuccess.value = ''
-}
-
-function updateSelectedAgent(agent: AgentInfo) {
-  agents.value = agents.value.map((item) =>
-    agentKey(item) === agentKey(agent) ? agent : item
-  )
-  selectAgent(agent)
-}
-
-async function uploadFiles() {
-  if (!canUploadFiles.value || !selectedAgent.value?.agent_id) {
-    return
-  }
-
-  isUploadingFiles.value = true
-  uploadError.value = ''
-  uploadSuccess.value = ''
-
-  const formData = new FormData()
-  selectedFiles.value.forEach((file) => {
-    formData.append('files', file)
-  })
-
-  try {
-    const res = await fetch(`${BASE_URL}/agents/${selectedAgent.value.agent_id}/files`, {
-      method: 'POST',
-      body: formData,
-    })
-    const data = await res.json()
-
-    if (!res.ok) {
-      throw new Error(data.error ?? `HTTP ${res.status}`)
-    }
-
-    const updatedAgent = normalizeAgent(data.agent as Record<string, unknown>)
-
-    if (updatedAgent) {
-      updateSelectedAgent(updatedAgent)
-    }
-
-    selectedFiles.value = []
-
-    if (fileInput.value) {
-      fileInput.value.value = ''
-    }
-
-    uploadSuccess.value = 'Archivos subidos e indexados en el vector store.'
-  } catch (err) {
-    uploadError.value =
-      err instanceof Error ? err.message : 'No se pudieron subir los archivos.'
-  } finally {
-    isUploadingFiles.value = false
-  }
-}
-
-async function uploadCodeFiles() {
-  if (!canUploadCodeFiles.value || !selectedAgent.value?.agent_id) {
-    return
-  }
-
-  isUploadingCodeFiles.value = true
-  codeUploadError.value = ''
-  codeUploadSuccess.value = ''
-
-  const formData = new FormData()
-  selectedCodeFiles.value.forEach((file) => {
-    formData.append('files', file)
-  })
-
-  try {
-    const res = await fetch(`${BASE_URL}/agents/${selectedAgent.value.agent_id}/code-files`, {
-      method: 'POST',
-      body: formData,
-    })
-    const data = await res.json()
-
-    if (!res.ok) {
-      throw new Error(data.error ?? `HTTP ${res.status}`)
-    }
-
-    const updatedAgent = normalizeAgent(data.agent as Record<string, unknown>)
-
-    if (updatedAgent) {
-      updateSelectedAgent(updatedAgent)
-    }
-
-    selectedCodeFiles.value = []
-
-    if (codeFileInput.value) {
-      codeFileInput.value.value = ''
-    }
-
-    codeUploadSuccess.value = 'Archivos listos para Code Interpreter.'
-  } catch (err) {
-    codeUploadError.value =
-      err instanceof Error ? err.message : 'No se pudieron subir los archivos de analisis.'
-  } finally {
-    isUploadingCodeFiles.value = false
-  }
-}
-
-function askAgent() {
+async function askAgent() {
   const message = question.value.trim()
 
   if (!message || isStreaming.value || !selectedAgent.value) {
@@ -645,77 +677,135 @@ function askAgent() {
   answer.value = ''
   errorMessage.value = ''
   generatedArtifacts.value = []
-  status.value = 'Conectando'
+  status.value = selectedUploadFiles.value.length ? 'Subiendo' : 'Pensando'
   isStreaming.value = true
 
-  source?.close()
-
-  const params = new URLSearchParams({ message })
+  requestController?.abort()
+  const controller = new AbortController()
+  requestController = controller
+  const formData = new FormData()
   const activeAgent = selectedAgent.value
 
+  formData.append('message', message)
+
+  if (threadId.value) {
+    formData.append('thread_id', threadId.value)
+  }
+
   if (activeAgent.agent_id) {
-    params.set('agent_id', activeAgent.agent_id)
+    formData.append('agent_id', activeAgent.agent_id)
   } else {
-    params.set('agent_name', activeAgent.name)
+    formData.append('agent_name', activeAgent.name)
 
     if (activeAgent.version) {
-      params.set('agent_version', activeAgent.version)
+      formData.append('agent_version', activeAgent.version)
     }
   }
 
-  // prueba en local
-  source = new EventSource(`${BASE_URL}/chat-stream?${params.toString()}`)
-  // pruba en la nube
-  //source = new EventSource(
-  //`https://audibotfunctions-aubaarg4h0gyf3hd.eastus2-01.azurewebsites.net/chat-stream?${params.toString()}`
-  //)
-  source.onopen = () => {
-    status.value = 'Pensando'
-  }
+  selectedUploadFiles.value.forEach((file) => {
+    formData.append('file', file)
+  })
 
-  source.onmessage = (event) => {
-    if (event.data === '[FIN]') {
-      closeStream('Finalizado')
+  try {
+    const res = await fetch(`${BASE_URL}/upload-and-ask`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      const contentType = res.headers.get('content-type') ?? ''
+      const data = contentType.includes('application/json')
+        ? await res.json()
+        : { error: await res.text() }
+      throw new Error(data.error ?? `HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    applyUploadMetadata(data as Record<string, unknown>)
+    selectedUploadFiles.value = []
+
+    if (uploadFileInput.value) {
+      uploadFileInput.value.value = ''
+    }
+
+    const invocationId = String(data.invocation_id ?? '').trim()
+    const streamUrl = String(
+      data.stream_url ??
+        (invocationId ? `${BASE_URL}/upload-and-ask-stream/${invocationId}` : '')
+    ).trim()
+
+    if (!streamUrl) {
+      if (data.respuesta) {
+        answer.value = String(data.respuesta)
+        generatedArtifacts.value = Array.isArray(data.archivos_generados)
+          ? (data.archivos_generados as GeneratedArtifact[])
+          : []
+        status.value = 'Finalizado sin streaming'
+        throw new Error(
+          'El backend respondió con el contrato anterior sin stream_url. Reinicia Azure Functions para cargar la versión nueva.'
+        )
+      }
+
+      throw new Error(
+        `El backend no devolvió stream_url ni invocation_id. Campos recibidos: ${Object.keys(
+          data as Record<string, unknown>
+        ).join(', ') || 'ninguno'}`
+      )
+    }
+
+    status.value = 'Pensando'
+    source?.close()
+    source = new EventSource(streamUrl)
+
+    source.onmessage = (event) => {
+      if (event.data === '[FIN]') {
+        closeStream(errorMessage.value ? 'Error' : 'Finalizado')
+        return
+      }
+
+      handleUploadSseEvent('message', event.data)
+    }
+
+    source.addEventListener('metadata', (event) => {
+      handleUploadSseEvent('metadata', (event as MessageEvent).data)
+    })
+
+    source.addEventListener('uploaded-files', (event) => {
+      handleUploadSseEvent('uploaded-files', (event as MessageEvent).data)
+    })
+
+    source.addEventListener('artifact', (event) => {
+      handleUploadSseEvent('artifact', (event as MessageEvent).data)
+    })
+
+    source.addEventListener('done', (event) => {
+      handleUploadSseEvent('done', (event as MessageEvent).data)
+    })
+
+    source.addEventListener('agent-error', (event) => {
+      handleUploadSseEvent('agent-error', (event as MessageEvent).data)
+      closeStream('Error')
+    })
+
+    source.onerror = () => {
+      if (isStreaming.value) {
+        errorMessage.value = 'Se cerró la conexión con Azure Functions.'
+        closeStream('Error de conexión')
+      }
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
       return
     }
 
-    answer.value += event.data
-  }
-
-  source.addEventListener('metadata', (event) => {
-    try {
-      const metadata = JSON.parse((event as MessageEvent).data)
-      agentLabel.value = `${metadata.agent}:${metadata.version}`
-    } catch {
-      agentLabel.value = 'agente-code-interpreter'
-    }
-  })
-
-  source.addEventListener('artifact', (event) => {
-    try {
-      const artifact = JSON.parse((event as MessageEvent).data) as GeneratedArtifact
-      const exists = generatedArtifacts.value.some(
-        (item) =>
-          item.container_id === artifact.container_id && item.file_id === artifact.file_id
-      )
-
-      if (!exists) {
-        generatedArtifacts.value.push(artifact)
-      }
-    } catch {
-      console.warn('No se pudo leer el artifact del stream.')
-    }
-  })
-
-  source.addEventListener('agent-error', (event) => {
-    errorMessage.value = (event as MessageEvent).data
-    closeStream('Error')
-  })
-
-  source.onerror = () => {
-    if (isStreaming.value) {
-      errorMessage.value = 'Se cerró la conexión con Azure Functions.'
-      closeStream('Error de conexión')
+    errorMessage.value =
+      err instanceof Error ? err.message : 'No se pudo consultar el agente.'
+    status.value = 'Error'
+    isStreaming.value = false
+  } finally {
+    if (requestController === controller) {
+      requestController = null
     }
   }
 }
@@ -726,6 +816,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   source?.close()
+  requestController?.abort()
 })
 </script>
 
@@ -810,80 +901,28 @@ onBeforeUnmount(() => {
 
         <section class="panel">
           <div class="panel-header">
-            <h2>Conocimiento</h2>
-            <code>{{ selectedAgent?.vector_store_id ?? 'sin vector store' }}</code>
+            <h2>Sesión</h2>
+            <code>{{ threadId || 'thread nuevo' }}</code>
           </div>
-
-          <input
-            ref="fileInput"
-            type="file"
-            multiple
-            accept=".c,.cs,.cpp,.css,.doc,.docx,.html,.java,.js,.json,.md,.pdf,.php,.pptx,.py,.rb,.sh,.tex,.ts,.txt"
-            :disabled="!selectedAgent?.agent_id || isUploadingFiles || isStreaming"
-            @change="onFilesChange"
-          />
-
-          <div class="actions">
-            <button type="button" :disabled="!canUploadFiles" @click="uploadFiles">
-              {{ isUploadingFiles ? 'Subiendo...' : 'Subir a File Search' }}
-            </button>
-          </div>
-
-          <p v-if="uploadError" class="error">{{ uploadError }}</p>
-          <p v-if="uploadSuccess" class="success">{{ uploadSuccess }}</p>
 
           <div class="artifact-list">
-            <p v-if="!selectedAgent?.files?.length" class="empty compact">
-              Este agente todavía no tiene documentos de conocimiento.
+            <p v-if="!sessionResources.length" class="empty compact">
+              Los archivos enviados aparecerán aquí con su destino.
             </p>
             <div
-              v-for="file in selectedAgent?.files ?? []"
-              :key="file.file_id ?? file.filename"
-              class="file-row"
+              v-for="resource in sessionResources"
+              :key="resource.id"
+              class="file-row resource-row"
             >
-              <span>{{ file.filename }}</span>
-              <code>{{ file.status ?? 'procesado' }}</code>
+              <span>{{ resource.filename }}</span>
+              <code>{{ destinationLabel(resource.destination) }}</code>
+              <small>{{ resource.file_id || resource.upload_id }}</small>
+              <small>{{ resource.content_type || 'sin MIME' }}</small>
+              <small v-if="resource.vector_store_id">VS {{ resource.vector_store_id }}</small>
+              <small>{{ formatBytes(resource.bytes) }}</small>
             </div>
           </div>
 
-          <div class="upload-divider"></div>
-
-          <div class="panel-header">
-            <h2>Análisis</h2>
-            <span class="hint">Excel, CSV y datos</span>
-          </div>
-
-          <input
-            ref="codeFileInput"
-            type="file"
-            multiple
-            accept=".xlsx,.csv,.json,.txt,.py,.zip,.png,.jpg,.jpeg,.gif,.pdf,.docx,.pptx"
-            :disabled="!selectedAgent?.agent_id || isUploadingCodeFiles || isStreaming"
-            @change="onCodeFilesChange"
-          />
-
-          <div class="actions">
-            <button type="button" :disabled="!canUploadCodeFiles" @click="uploadCodeFiles">
-              {{ isUploadingCodeFiles ? 'Subiendo...' : 'Subir a Code Interpreter' }}
-            </button>
-          </div>
-
-          <p v-if="codeUploadError" class="error">{{ codeUploadError }}</p>
-          <p v-if="codeUploadSuccess" class="success">{{ codeUploadSuccess }}</p>
-
-          <div class="artifact-list">
-            <p v-if="!selectedAgent?.code_files?.length" class="empty compact">
-              Este agente todavía no tiene archivos para análisis.
-            </p>
-            <div
-              v-for="file in selectedAgent?.code_files ?? []"
-              :key="file.file_id ?? file.filename"
-              class="file-row"
-            >
-              <span>{{ file.filename }}</span>
-              <code>python</code>
-            </div>
-          </div>
         </section>
       </section>
 
@@ -896,9 +935,29 @@ onBeforeUnmount(() => {
           rows="4"
           placeholder="Escribe tu pregunta para el agente..."
         />
+        <label for="unified-files">Archivos</label>
+        <input
+          id="unified-files"
+          ref="uploadFileInput"
+          type="file"
+          multiple
+          accept=".png,.jpg,.jpeg,.webp,.gif,.csv,.xlsx,.json,.tsv,.pdf,.docx,.txt,.md,.pptx"
+          :disabled="isStreaming"
+          @change="onUnifiedFilesChange"
+        />
+        <div v-if="selectedUploadFiles.length" class="artifact-list selected-files">
+          <div
+            v-for="file in selectedUploadFiles"
+            :key="`${file.name}:${file.size}:${file.lastModified}`"
+            class="file-row"
+          >
+            <span>{{ file.name }}</span>
+            <code>{{ Math.ceil(file.size / 1024) }} KB</code>
+          </div>
+        </div>
         <div class="actions">
           <button type="submit" :disabled="!canAsk">
-            Preguntar
+            {{ isStreaming ? 'Enviando...' : 'Preguntar' }}
           </button>
           <button
             type="button"
