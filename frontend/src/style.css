@@ -264,6 +264,10 @@ h2 {
   gap: 12px;
 }
 
+.wide {
+  grid-column: 1 / -1;
+}
+
 .tool-options {
   display: flex;
   flex-wrap: wrap;
@@ -300,6 +304,11 @@ h2 {
 
 .agent-item:hover:not(:disabled) {
   background: #e2e8f0;
+}
+
+.agent-item.active {
+  border-color: var(--accent);
+  background: rgba(23, 105, 224, 0.08);
 }
 
 .agent-item code {
@@ -347,6 +356,177 @@ code {
   white-space: pre-wrap;
 }
 
+.markdown-answer {
+  display: grid;
+  gap: 12px;
+  white-space: normal;
+}
+
+.markdown-answer h2,
+.markdown-answer h3,
+.markdown-answer p,
+.markdown-answer ul,
+.markdown-answer ol,
+.markdown-answer blockquote,
+.markdown-answer pre {
+  margin: 0;
+}
+
+.markdown-answer h2 {
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.markdown-answer h3 {
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+.markdown-answer ul,
+.markdown-answer ol {
+  display: grid;
+  gap: 6px;
+  padding-left: 24px;
+}
+
+.markdown-answer li {
+  padding-left: 2px;
+}
+
+.markdown-answer blockquote {
+  border-left: 3px solid var(--border);
+  padding: 8px 0 8px 14px;
+  color: var(--muted);
+}
+
+.markdown-answer .table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.markdown-answer table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.markdown-answer th,
+.markdown-answer td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-answer th {
+  color: var(--text);
+  background: var(--surface-muted);
+  font-weight: 800;
+}
+
+.markdown-answer tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-answer pre {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 38px 14px 14px;
+  background: #101828;
+}
+
+.markdown-answer pre::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 28px;
+  padding: 6px 12px;
+  color: #cbd5e1;
+  background: #1d2939;
+  content: attr(data-language);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.markdown-answer pre:not([data-language]) {
+  padding-top: 14px;
+}
+
+.markdown-answer pre:not([data-language])::before {
+  content: none;
+}
+
+.markdown-answer pre code {
+  display: block;
+  max-width: none;
+  color: #f8fafc;
+  white-space: pre;
+}
+
+.markdown-answer :not(pre) > code {
+  max-width: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  background: var(--surface-muted);
+  white-space: normal;
+}
+
+.markdown-answer a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.markdown-answer .sandbox-link {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.markdown-answer .sandbox-link code {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.generated-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+  background: #ffffff;
+}
+
+.generated-files span {
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.generated-files a {
+  border: 1px solid rgba(23, 105, 224, 0.22);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--accent);
+  background: rgba(23, 105, 224, 0.08);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.generated-files a:hover {
+  border-color: var(--accent);
+}
+
 .empty {
   color: var(--muted);
 }
@@ -371,6 +551,30 @@ code {
   display: grid;
   gap: 8px;
   padding: 0 18px 18px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface-muted);
+}
+
+.file-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
 }
 
 .artifact-list a {
