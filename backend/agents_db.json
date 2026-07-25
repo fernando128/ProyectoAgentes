@@ -1,13 +1,13 @@
 {
   "agents": {
-    "b525c6c6-ae83-4fb1-8771-f2d21a3512b6": {
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "display_name": "AgenteTest",
-      "agent_name": "AgenteTest-2f41711f623c",
+    "03c05ea6-7697-4207-80a8-290457a72749": {
+      "agent_id": "03c05ea6-7697-4207-80a8-290457a72749",
+      "display_name": "Nuevo agente",
+      "agent_name": "Nuevo-agente-c17117d1b81a",
       "agent_version": "1",
-      "vector_store_id": "vs_oG2MLZGe9FGlRMascgd79Ape",
+      "vector_store_id": "vs_0esfpQLmfzIFZRGX7f2lheLd",
       "vector_store_ids": [
-        "vs_oG2MLZGe9FGlRMascgd79Ape"
+        "vs_0esfpQLmfzIFZRGX7f2lheLd"
       ],
       "model": "gpt-chat-latest",
       "instructions": "Eres un asistente util. Usa los archivos cargados cuando la pregunta dependa de documentos y usa Python cuando necesites calcular o analizar datos.\n\nCapacidades disponibles:\n- Usa File Search cuando la pregunta dependa de documentos, archivos, manuales, politicas, contratos, datos cargados o conocimiento privado del usuario.\n- Usa Code Interpreter cuando necesites ejecutar Python para calculos, analisis de datos, transformaciones, tablas, graficos, validaciones o razonamiento numerico.\n- Si el usuario pide crear, generar o descargar un archivo, usa Code Interpreter para escribir el archivo real en /mnt/data. No simules enlaces sandbox ni digas que un archivo fue creado si no lo escribiste con la herramienta.\n- Si la pregunta se responde con conocimiento general y no requiere archivos ni calculos, responde directamente.\nSi el mensaje incluye una imagen, analízala directamente con tu capacidad de visión; nunca uses code interpreter ni file search para interpretar imágenes.",
@@ -19,161 +19,23 @@
       "supports_unified_upload": true,
       "files": [],
       "code_files": [],
-      "created_at": "2026-07-24T18:16:59.954650+00:00",
-      "updated_at": "2026-07-24T18:16:59.954650+00:00"
-    },
-    "e9149c41-372b-42f4-a290-e2fb6e4f1ec5": {
-      "agent_id": "e9149c41-372b-42f4-a290-e2fb6e4f1ec5",
-      "display_name": "Agente de test 2",
-      "agent_name": "Agente-de-test-2-7315d99bc90c",
-      "agent_version": "1",
-      "vector_store_id": "vs_LDj33Dzm20KolTdUaZq2HupR",
-      "vector_store_ids": [
-        "vs_LDj33Dzm20KolTdUaZq2HupR"
-      ],
-      "model": "gpt-chat-latest",
-      "instructions": "Eres un asistente util. Usa los archivos cargados cuando la pregunta dependa de documentos y usa Python cuando necesites calcular o analizar datos.\n\nCapacidades disponibles:\n- Usa File Search cuando la pregunta dependa de documentos, archivos, manuales, politicas, contratos, datos cargados o conocimiento privado del usuario.\n- Usa Code Interpreter cuando necesites ejecutar Python para calculos, analisis de datos, transformaciones, tablas, graficos, validaciones o razonamiento numerico.\n- Si el usuario pide crear, generar o descargar un archivo, usa Code Interpreter para escribir el archivo real en /mnt/data. No simules enlaces sandbox ni digas que un archivo fue creado si no lo escribiste con la herramienta.\n- Si la pregunta se responde con conocimiento general y no requiere archivos ni calculos, responde directamente.\nSi el mensaje incluye una imagen, analízala directamente con tu capacidad de visión; nunca uses code interpreter ni file search para interpretar imágenes.",
-      "description": "Agente con Code Interpreter y File Search creado desde el backend.",
-      "tools": {
-        "code_interpreter": true,
-        "file_search": true
-      },
-      "supports_unified_upload": true,
-      "files": [],
-      "code_files": [],
-      "created_at": "2026-07-24T23:31:48.739464+00:00",
-      "updated_at": "2026-07-24T23:31:48.739464+00:00"
+      "created_at": "2026-07-25T00:37:30.786602+00:00",
+      "updated_at": "2026-07-25T00:37:30.786602+00:00"
     }
   },
   "threads": {
-    "conv_5e9709e8fe84f290009Njh2R3VWXLsGLxM06QNlfD93OMN0B1X": {
-      "thread_id": "conv_5e9709e8fe84f290009Njh2R3VWXLsGLxM06QNlfD93OMN0B1X",
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "agent_name": "AgenteTest-2f41711f623c",
+    "conv_989c9ea5e597365d000fbDs99WxvXMm0JYVUDuVdmOMTCLXNlG": {
+      "thread_id": "conv_989c9ea5e597365d000fbDs99WxvXMm0JYVUDuVdmOMTCLXNlG",
+      "agent_id": "03c05ea6-7697-4207-80a8-290457a72749",
+      "agent_name": "Nuevo-agente-c17117d1b81a",
       "agent_version": "1",
-      "vector_store_id": "vs_9DPUgtrvMbikuEMHwX6BRmKO",
+      "title": "Nuevo chat",
+      "vector_store_id": "vs_aGEuC0FFzLMxOzihReCqT5Z7",
       "files": [
         {
-          "upload_id": "d07a0922e9384f83a77c8726192f8f01",
-          "file_id": "assistant-EaLFJ2T2etatJaTXuvTV2c",
-          "vector_store_id": "vs_9DPUgtrvMbikuEMHwX6BRmKO",
-          "filename": "E15_ Poli_tica de estandarizacio_n y despliegue.pdf",
-          "content_type": "application/pdf",
-          "bytes": 776602,
-          "status": "completed",
-          "route": "file_search",
-          "destination": "file_search",
-          "tool": "file_search",
-          "created_at": "2026-07-24T18:18:15.788196+00:00"
-        }
-      ],
-      "code_files": [],
-      "images": [],
-      "created_at": "2026-07-24T18:17:31.504652+00:00",
-      "updated_at": "2026-07-24T18:18:15.788196+00:00"
-    },
-    "conv_422fc33faae29bb200cxNRKvqjpXv2s3LvsvAcu5Qzsqguf6aj": {
-      "thread_id": "conv_422fc33faae29bb200cxNRKvqjpXv2s3LvsvAcu5Qzsqguf6aj",
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "agent_name": "AgenteTest-2f41711f623c",
-      "agent_version": "1",
-      "vector_store_id": "vs_IorPjrcfbZ2Qu0nNSnDiXqHA",
-      "files": [
-        {
-          "upload_id": "a3be65da19d84ca8a53c236ece2125e3",
-          "file_id": "assistant-8F9TQgtNTUQaUqmTpEkhJo",
-          "vector_store_id": "vs_IorPjrcfbZ2Qu0nNSnDiXqHA",
-          "filename": "E15_ Poli_tica de estandarizacio_n y despliegue.pdf",
-          "content_type": "application/pdf",
-          "bytes": 776602,
-          "status": "completed",
-          "route": "file_search",
-          "destination": "file_search",
-          "tool": "file_search",
-          "created_at": "2026-07-24T18:25:29.908864+00:00"
-        }
-      ],
-      "code_files": [],
-      "images": [],
-      "created_at": "2026-07-24T18:24:53.672362+00:00",
-      "updated_at": "2026-07-24T18:25:29.908864+00:00"
-    },
-    "conv_74409f33aaec28e900V3S3Dnv8PhUgpNvKGhWUUyr3VfRSTOkS": {
-      "thread_id": "conv_74409f33aaec28e900V3S3Dnv8PhUgpNvKGhWUUyr3VfRSTOkS",
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "agent_name": "AgenteTest-2f41711f623c",
-      "agent_version": "1",
-      "vector_store_id": "vs_dHpprvoYgA4TeIQftsS1o4c2",
-      "files": [
-        {
-          "upload_id": "02b844ccec1f4df6a662dff8eb4913a5",
-          "file_id": "assistant-XJKPmABxEDFGmKtt15LK52",
-          "vector_store_id": "vs_dHpprvoYgA4TeIQftsS1o4c2",
-          "filename": "E15_ Poli_tica de estandarizacio_n y despliegue.pdf",
-          "content_type": "application/pdf",
-          "bytes": 776602,
-          "status": "completed",
-          "route": "file_search",
-          "destination": "file_search",
-          "tool": "file_search",
-          "created_at": "2026-07-24T18:31:03.860402+00:00"
-        }
-      ],
-      "code_files": [],
-      "images": [],
-      "created_at": "2026-07-24T18:30:57.381505+00:00",
-      "updated_at": "2026-07-24T18:31:03.860402+00:00"
-    },
-    "conv_d3cb4bc61f3139f100IIyJT1u6AJCCK4QK1MGlNBRneaeu0Jn1": {
-      "thread_id": "conv_d3cb4bc61f3139f100IIyJT1u6AJCCK4QK1MGlNBRneaeu0Jn1",
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "agent_name": "AgenteTest-2f41711f623c",
-      "agent_version": "1",
-      "vector_store_id": "vs_PHllmOy0yh3tjfUU370TgVPk",
-      "files": [
-        {
-          "upload_id": "8b617e55a40149fd929fe84938cc7968",
-          "file_id": "assistant-Rut74PsTwG2Hdr5hGm5nra",
-          "vector_store_id": "vs_PHllmOy0yh3tjfUU370TgVPk",
-          "filename": "E12_ Poli_tica de seguridad de modelos.pdf",
-          "content_type": "application/pdf",
-          "bytes": 845200,
-          "status": "completed",
-          "route": "file_search",
-          "destination": "file_search",
-          "tool": "file_search",
-          "created_at": "2026-07-24T18:33:36.455571+00:00"
-        }
-      ],
-      "code_files": [
-        {
-          "upload_id": "793a2d42a5644d48a40cc7755f4281b4",
-          "file_id": "assistant-FquYAqZLpzmf8s7DRkuPzr",
-          "filename": "1.Tabla Resumen Seguimiento Proyecto IA Actualizado.xlsx",
-          "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "bytes": 27044,
-          "purpose": "assistants",
-          "route": "code_interpreter",
-          "destination": "code_interpreter",
-          "tool": "code_interpreter",
-          "created_at": "2026-07-24T18:35:43.839785+00:00"
-        }
-      ],
-      "images": [],
-      "created_at": "2026-07-24T18:33:29.465810+00:00",
-      "updated_at": "2026-07-24T18:35:43.839785+00:00"
-    },
-    "conv_ea0c00d623c9b57b00sjLhIOvCTFGOO7EGA8Oldt9f2enmAPIF": {
-      "thread_id": "conv_ea0c00d623c9b57b00sjLhIOvCTFGOO7EGA8Oldt9f2enmAPIF",
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "agent_name": "AgenteTest-2f41711f623c",
-      "agent_version": "1",
-      "vector_store_id": "vs_Hv58QYswLBOIiRFtXv8ILVxc",
-      "files": [
-        {
-          "upload_id": "61667cfba6aa4a21b1661343c37bd6b8",
-          "file_id": "assistant-Ta12m2eVoSSuuoHANbZD65",
-          "vector_store_id": "vs_Hv58QYswLBOIiRFtXv8ILVxc",
+          "upload_id": "c61f993aa9674c61b450766d799000b1",
+          "file_id": "assistant-A2BcnH16zMS1ZhssAAoSEN",
+          "vector_store_id": "vs_aGEuC0FFzLMxOzihReCqT5Z7",
           "filename": "DocumentoTest2.pdf",
           "content_type": "application/pdf",
           "bytes": 50140,
@@ -181,13 +43,13 @@
           "route": "file_search",
           "destination": "file_search",
           "tool": "file_search",
-          "created_at": "2026-07-24T18:44:04.212419+00:00"
+          "created_at": "2026-07-25T00:39:14.562759+00:00"
         }
       ],
       "code_files": [],
       "images": [
         {
-          "upload_id": "b850c1025f3640bf935db93266973d9a",
+          "upload_id": "2f63e60ffe8f4c57bccd13d838d952c6",
           "file_id": null,
           "filename": "Captura de pantalla 2026-07-24 124903.png",
           "content_type": "image/png",
@@ -195,37 +57,24 @@
           "route": "vision",
           "destination": "vision",
           "tool": "native_vision",
-          "created_at": "2026-07-24T18:42:07.656085+00:00"
+          "created_at": "2026-07-25T00:39:52.241086+00:00"
         }
       ],
-      "created_at": "2026-07-24T18:42:13.162383+00:00",
-      "updated_at": "2026-07-24T18:44:04.212419+00:00"
+      "created_at": "2026-07-25T00:38:04.014865+00:00",
+      "updated_at": "2026-07-25T00:39:54.867219+00:00"
     },
-    "conv_61fb06980d534bb200FgBzfCWc6uMevFHdGtlCzqlrmGkwgzru": {
-      "thread_id": "conv_61fb06980d534bb200FgBzfCWc6uMevFHdGtlCzqlrmGkwgzru",
-      "agent_id": "b525c6c6-ae83-4fb1-8771-f2d21a3512b6",
-      "agent_name": "AgenteTest-2f41711f623c",
+    "conv_950e33784713a04000Xp8Zk85oRIf67dEDyS8MDLYYJi0WtV8c": {
+      "thread_id": "conv_950e33784713a04000Xp8Zk85oRIf67dEDyS8MDLYYJi0WtV8c",
+      "agent_id": "03c05ea6-7697-4207-80a8-290457a72749",
+      "agent_name": "Nuevo-agente-c17117d1b81a",
       "agent_version": "1",
-      "vector_store_id": "vs_92zWIK3DBXevneSukOLpyqz6",
-      "files": [
-        {
-          "upload_id": "7198ece63a01410b8c3fb440c6f9e054",
-          "file_id": "assistant-69rqxf8NVoqzPjqZi3uzri",
-          "vector_store_id": "vs_92zWIK3DBXevneSukOLpyqz6",
-          "filename": "DocumentoTest2.pdf",
-          "content_type": "application/pdf",
-          "bytes": 50140,
-          "status": "completed",
-          "route": "file_search",
-          "destination": "file_search",
-          "tool": "file_search",
-          "created_at": "2026-07-24T23:31:12.842224+00:00"
-        }
-      ],
+      "title": "Nuevo chat",
+      "vector_store_id": null,
+      "files": [],
       "code_files": [],
       "images": [],
-      "created_at": "2026-07-24T23:31:05.272200+00:00",
-      "updated_at": "2026-07-24T23:31:12.842224+00:00"
+      "created_at": "2026-07-25T00:41:11.261104+00:00",
+      "updated_at": "2026-07-25T00:41:25.040968+00:00"
     }
   },
   "invocations": {}

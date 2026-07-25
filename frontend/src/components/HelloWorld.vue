@@ -45,6 +45,29 @@ interface UploadedResource {
   created_at?: string | null
 }
 
+interface ChatMessage {
+  role: 'user' | 'assistant' | string
+  content: string
+  created_at?: string | null
+  metadata?: Record<string, unknown>
+}
+
+interface ChatThread {
+  thread_id: string
+  agent_id?: string | null
+  agent_name?: string | null
+  agent_version?: string | null
+  title: string
+  vector_store_id?: string | null
+  files?: UploadedResource[]
+  code_files?: UploadedResource[]
+  images?: UploadedResource[]
+  messages?: ChatMessage[]
+  message_count?: number
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 interface MarkdownListItem {
   content: string
   level: number
@@ -87,8 +110,15 @@ const createAgentSuccess = ref('')
 const selectedUploadFiles = ref<File[]>([])
 const uploadFileInput = ref<HTMLInputElement | null>(null)
 const threadId = ref('')
+const threads = ref<ChatThread[]>([])
+const selectedThread = ref<ChatThread | null>(null)
+const isLoadingThreads = ref(false)
+const isCreatingThread = ref(false)
+const threadsError = ref('')
+const chatMessages = ref<ChatMessage[]>([])
 const sessionResources = ref<UploadedResource[]>([])
 const generatedArtifacts = ref<GeneratedArtifact[]>([])
+const activeAssistantMessageIndex = ref<number | null>(null)
 
 let requestController: AbortController | null = null
 let source: EventSource | null = null
@@ -99,7 +129,9 @@ const canAsk = computed(
 const canCreateAgent = computed(
   () => newAgentName.value.trim().length > 0 && !isCreatingAgent.value
 )
-const renderedAnswer = computed(() => parseMarkdown(answer.value))
+const canCreateThread = computed(
+  () => !!selectedAgent.value?.agent_id && !isCreatingThread.value && !isStreaming.value
+)
 
 const BASE_URL = 'http://localhost:7071'
 // const BASE_URL = 'https://audibotfunctions-aubaarg4h0gyf3hd.eastus2-01.azurewebsites.net/api'
@@ -169,6 +201,74 @@ function normalizeUploadedResources(value: unknown): UploadedResource[] {
     )
 }
 
+function normalizeChatMessage(raw: Record<string, unknown>): ChatMessage | null {
+  const role = String(raw.role ?? '').trim()
+  const content = String(raw.content ?? '')
+
+  if (!role) {
+    return null
+  }
+
+  return {
+    role,
+    content,
+    created_at: raw.created_at ? String(raw.created_at) : null,
+    metadata:
+      raw.metadata && typeof raw.metadata === 'object'
+        ? (raw.metadata as Record<string, unknown>)
+        : undefined,
+  }
+}
+
+function normalizeThread(raw: Record<string, unknown>): ChatThread | null {
+  const id = String(raw.thread_id ?? '').trim()
+
+  if (!id) {
+    return null
+  }
+
+  return {
+    thread_id: id,
+    agent_id: raw.agent_id ? String(raw.agent_id) : null,
+    agent_name: raw.agent_name ? String(raw.agent_name) : null,
+    agent_version: raw.agent_version ? String(raw.agent_version) : null,
+    title: String(raw.title ?? 'Nuevo chat').trim() || 'Nuevo chat',
+    vector_store_id: raw.vector_store_id ? String(raw.vector_store_id) : null,
+    files: normalizeUploadedResources(raw.files),
+    code_files: normalizeUploadedResources(raw.code_files),
+    images: normalizeUploadedResources(raw.images),
+    messages: Array.isArray(raw.messages)
+      ? raw.messages
+          .map((message) => normalizeChatMessage(message as Record<string, unknown>))
+          .filter((message: ChatMessage | null): message is ChatMessage =>
+            Boolean(message)
+          )
+      : [],
+    message_count: typeof raw.message_count === 'number' ? raw.message_count : 0,
+    created_at: raw.created_at ? String(raw.created_at) : null,
+    updated_at: raw.updated_at ? String(raw.updated_at) : null,
+  }
+}
+
+function threadResources(thread: ChatThread | null) {
+  if (!thread) {
+    return []
+  }
+
+  return [
+    ...(thread.files ?? []),
+    ...(thread.code_files ?? []),
+    ...(thread.images ?? []),
+  ]
+}
+
+function upsertThread(thread: ChatThread) {
+  threads.value = [
+    thread,
+    ...threads.value.filter((item) => item.thread_id !== thread.thread_id),
+  ]
+}
+
 function destinationLabel(destination: string) {
   if (destination === 'file_search') {
     return 'File Search'
@@ -200,6 +300,28 @@ function formatBytes(bytes?: number | null) {
 function applyUploadMetadata(data: Record<string, unknown>) {
   if (data.thread_id) {
     threadId.value = String(data.thread_id)
+    const existingThread = threads.value.find((thread) => thread.thread_id === threadId.value)
+    const title = existingThread?.title || question.value.trim().slice(0, 80) || 'Nuevo chat'
+    const metadataThread: ChatThread = {
+      ...(existingThread ?? {
+        thread_id: threadId.value,
+        agent_id: selectedAgent.value?.agent_id ?? null,
+        agent_name: selectedAgent.value?.name ?? null,
+        agent_version: selectedAgent.value?.version ?? null,
+        title,
+        files: [],
+        code_files: [],
+        images: [],
+        messages: [],
+        message_count: 0,
+      }),
+      thread_id: threadId.value,
+      title,
+      updated_at: new Date().toISOString(),
+    }
+
+    upsertThread(metadataThread)
+    selectedThread.value = metadataThread
   }
 
   if (data.agent || data.version) {
@@ -230,6 +352,12 @@ function handleUploadSseEvent(eventName: string, data: string) {
 
   if (!eventName || eventName === 'message') {
     answer.value += data
+    if (activeAssistantMessageIndex.value === null) {
+      chatMessages.value.push({ role: 'assistant', content: '' })
+      activeAssistantMessageIndex.value = chatMessages.value.length - 1
+    }
+
+    chatMessages.value[activeAssistantMessageIndex.value].content += data
     status.value = 'Respondiendo'
     return
   }
@@ -247,6 +375,11 @@ function handleUploadSseEvent(eventName: string, data: string) {
 
     if (eventName === 'done') {
       status.value = 'Finalizado'
+      activeAssistantMessageIndex.value = null
+
+      if (selectedAgent.value?.agent_id) {
+        void fetchThreads(selectedAgent.value, false)
+      }
     }
 
     return
@@ -553,6 +686,57 @@ function parseMarkdown(markdown: string): MarkdownBlock[] {
   return blocks
 }
 
+function renderMessageHtml(content: string) {
+  return parseMarkdown(content)
+    .map((block) => {
+      if (block.type === 'heading') {
+        const tag = block.level === 1 ? 'h2' : 'h3'
+        return `<${tag}>${block.html ?? ''}</${tag}>`
+      }
+
+      if (block.type === 'code') {
+        const language = block.language
+          ? ` data-language="${escapeHtml(block.language)}"`
+          : ''
+        return `<pre${language}><code>${escapeHtml(block.content ?? '')}</code></pre>`
+      }
+
+      if (block.type === 'blockquote') {
+        return `<blockquote>${block.html ?? ''}</blockquote>`
+      }
+
+      if (block.type === 'table' && block.table) {
+        const headers = block.table.headers
+          .map((header) => `<th>${header}</th>`)
+          .join('')
+        const rows = block.table.rows
+          .map(
+            (row) =>
+              `<tr>${block.table?.headers
+                .map((_, index) => `<td>${row[index] ?? ''}</td>`)
+                .join('')}</tr>`
+          )
+          .join('')
+
+        return `<div class="table-wrap"><table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`
+      }
+
+      if (block.type === 'list') {
+        const tag = block.ordered ? 'ol' : 'ul'
+        const items = (block.items ?? [])
+          .map(
+            (item) =>
+              `<li style="margin-left: ${item.level * 18}px">${item.content}</li>`
+          )
+          .join('')
+        return `<${tag}>${items}</${tag}>`
+      }
+
+      return `<p>${block.html ?? ''}</p>`
+    })
+    .join('')
+}
+
 async function fetchAgents() {
   isLoadingAgents.value = true
   agentsError.value = ''
@@ -584,6 +768,142 @@ async function fetchAgents() {
   }
 }
 
+async function fetchThreads(agent: AgentInfo, selectFirst = true) {
+  const agentId = agent.agent_id
+
+  threadsError.value = ''
+
+  if (!agentId) {
+    threads.value = []
+    selectedThread.value = null
+    threadId.value = ''
+    return
+  }
+
+  isLoadingThreads.value = true
+
+  try {
+    const res = await fetch(`${BASE_URL}/agents/${encodeURIComponent(agentId)}/threads`)
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    const loadedThreads = (Array.isArray(data.threads) ? data.threads : [])
+      .map((thread: Record<string, unknown>) => normalizeThread(thread))
+      .filter((thread: ChatThread | null): thread is ChatThread => Boolean(thread))
+
+    threads.value = loadedThreads
+
+    if (!selectFirst) {
+      const refreshedThread = loadedThreads.find((thread) => thread.thread_id === threadId.value)
+
+      if (refreshedThread) {
+        selectedThread.value = refreshedThread
+      }
+
+      return
+    }
+
+    const nextThread =
+      loadedThreads.find((thread) => thread.thread_id === threadId.value) ??
+      loadedThreads[0] ??
+      null
+
+    if (nextThread) {
+      await selectThread(nextThread)
+    } else {
+      selectedThread.value = null
+      threadId.value = ''
+      chatMessages.value = []
+      answer.value = ''
+      sessionResources.value = []
+    }
+  } catch (err) {
+    threadsError.value = 'No se pudieron cargar los chats del agente.'
+    console.error(err)
+  } finally {
+    isLoadingThreads.value = false
+  }
+}
+
+async function createThread() {
+  const agent = selectedAgent.value
+
+  if (!agent?.agent_id || isCreatingThread.value) {
+    return
+  }
+
+  isCreatingThread.value = true
+  threadsError.value = ''
+
+  try {
+    const res = await fetch(`${BASE_URL}/agents/${encodeURIComponent(agent.agent_id)}/threads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title: 'Nuevo chat' }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.error ?? `HTTP ${res.status}`)
+    }
+
+    const thread = normalizeThread(data.thread as Record<string, unknown>)
+
+    if (!thread) {
+      throw new Error('El backend no devolvió un chat válido.')
+    }
+
+    upsertThread(thread)
+    await selectThread(thread)
+  } catch (err) {
+    threadsError.value = err instanceof Error ? err.message : 'No se pudo crear el chat.'
+  } finally {
+    isCreatingThread.value = false
+  }
+}
+
+async function selectThread(thread: ChatThread) {
+  if (isStreaming.value) {
+    return
+  }
+
+  selectedThread.value = thread
+  threadId.value = thread.thread_id
+  answer.value = ''
+  errorMessage.value = ''
+  generatedArtifacts.value = []
+  sessionResources.value = threadResources(thread)
+
+  try {
+    const res = await fetch(`${BASE_URL}/threads/${encodeURIComponent(thread.thread_id)}`)
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    const detailedThread = normalizeThread(data.thread as Record<string, unknown>)
+
+    if (!detailedThread) {
+      throw new Error('El backend no devolvió un chat válido.')
+    }
+
+    selectedThread.value = detailedThread
+    upsertThread(detailedThread)
+    chatMessages.value = detailedThread.messages ?? []
+    sessionResources.value = threadResources(detailedThread)
+  } catch (err) {
+    threadsError.value = 'No se pudo cargar el detalle del chat.'
+    chatMessages.value = thread.messages ?? []
+    console.error(err)
+  }
+}
+
 function selectAgent(agent: AgentInfo) {
   const previousKey = selectedAgent.value ? agentKey(selectedAgent.value) : ''
   const nextKey = agentKey(agent)
@@ -593,9 +913,13 @@ function selectAgent(agent: AgentInfo) {
   if (previousKey && previousKey !== nextKey) {
     threadId.value = ''
     answer.value = ''
+    chatMessages.value = []
+    selectedThread.value = null
     sessionResources.value = []
     generatedArtifacts.value = []
   }
+
+  void fetchThreads(agent)
 }
 
 function closeStream(finalStatus = 'Finalizado') {
@@ -605,6 +929,7 @@ function closeStream(finalStatus = 'Finalizado') {
   requestController = null
   isStreaming.value = false
   status.value = finalStatus
+  activeAssistantMessageIndex.value = null
 }
 
 async function createAgent() {
@@ -677,6 +1002,12 @@ async function askAgent() {
   answer.value = ''
   errorMessage.value = ''
   generatedArtifacts.value = []
+  chatMessages.value.push({
+    role: 'user',
+    content: message,
+    created_at: new Date().toISOString(),
+  })
+  activeAssistantMessageIndex.value = null
   status.value = selectedUploadFiles.value.length ? 'Subiendo' : 'Pensando'
   isStreaming.value = true
 
@@ -897,12 +1228,48 @@ onBeforeUnmount(() => {
               No hay agentes disponibles.
             </p>
           </div>
+
+          <div class="upload-divider"></div>
+
+          <div class="panel-header">
+            <h2>Chats</h2>
+            <button
+              type="button"
+              class="secondary"
+              :disabled="!canCreateThread"
+              @click="createThread"
+            >
+              {{ isCreatingThread ? 'Creando...' : 'Nuevo chat' }}
+            </button>
+          </div>
+
+          <p v-if="threadsError" class="error">{{ threadsError }}</p>
+
+          <div class="chat-list">
+            <button
+              v-for="thread in threads"
+              :key="thread.thread_id"
+              type="button"
+              class="chat-item"
+              :class="{ active: selectedThread?.thread_id === thread.thread_id }"
+              :disabled="isStreaming"
+              @click="selectThread(thread)"
+            >
+              <span>{{ thread.title }}</span>
+              <small>{{ thread.message_count ?? 0 }} mensajes</small>
+            </button>
+
+            <p v-if="!isLoadingThreads && threads.length === 0" class="empty compact">
+              No hay chats para este agente.
+            </p>
+            <p v-if="isLoadingThreads" class="empty compact">Cargando chats...</p>
+          </div>
         </section>
 
         <section class="panel">
           <div class="panel-header">
             <h2>Sesión</h2>
-            <code>{{ threadId || 'thread nuevo' }}</code>
+            <code>{{ selectedThread?.title || threadId || 'thread nuevo' }}</code>
           </div>
 
           <div class="artifact-list">
@@ -972,66 +1339,23 @@ onBeforeUnmount(() => {
 
       <section class="response-panel" aria-live="polite">
         <div class="response-header">
-          <span>Respuesta</span>
+          <span>Conversación</span>
           <code>{{ agentLabel }}</code>
         </div>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
         <template v-else>
-          <div v-if="answer" class="answer markdown-answer">
-            <template v-for="(block, index) in renderedAnswer" :key="index">
-              <h2
-                v-if="block.type === 'heading' && block.level === 1"
-                v-html="block.html"
-              ></h2>
-              <h3
-                v-else-if="block.type === 'heading'"
-                v-html="block.html"
-              ></h3>
-              <pre
-                v-else-if="block.type === 'code'"
-                :data-language="block.language || undefined"
-              ><code>{{ block.content }}</code></pre>
-              <blockquote v-else-if="block.type === 'blockquote'" v-html="block.html"></blockquote>
-              <div v-else-if="block.type === 'table' && block.table" class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th
-                        v-for="(header, headerIndex) in block.table.headers"
-                        :key="headerIndex"
-                        v-html="header"
-                      ></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(row, rowIndex) in block.table.rows" :key="rowIndex">
-                      <td
-                        v-for="(_, cellIndex) in block.table.headers"
-                        :key="cellIndex"
-                        v-html="row[cellIndex] ?? ''"
-                      ></td>
-                    </tr>
-                  </tbody>
-                </table>
+          <div v-if="chatMessages.length" class="chat-transcript">
+            <article
+              v-for="(message, index) in chatMessages"
+              :key="`${message.role}:${message.created_at ?? index}`"
+              class="chat-message"
+              :class="message.role === 'user' ? 'from-user' : 'from-agent'"
+            >
+              <div class="message-meta">
+                <span>{{ message.role === 'user' ? 'Tú' : 'Agente' }}</span>
               </div>
-              <ol v-else-if="block.type === 'list' && block.ordered">
-                <li
-                  v-for="(item, itemIndex) in block.items"
-                  :key="itemIndex"
-                  :style="{ marginLeft: `${item.level * 18}px` }"
-                  v-html="item.content"
-                ></li>
-              </ol>
-              <ul v-else-if="block.type === 'list'">
-                <li
-                  v-for="(item, itemIndex) in block.items"
-                  :key="itemIndex"
-                  :style="{ marginLeft: `${item.level * 18}px` }"
-                  v-html="item.content"
-                ></li>
-              </ul>
-              <p v-else v-html="block.html"></p>
-            </template>
+              <div class="message-bubble" v-html="renderMessageHtml(message.content)"></div>
+            </article>
           </div>
           <div v-if="generatedArtifacts.length" class="generated-files">
             <span>Archivos generados</span>
@@ -1045,8 +1369,8 @@ onBeforeUnmount(() => {
               {{ artifact.filename }}
             </a>
           </div>
-          <p v-if="!answer && !generatedArtifacts.length" class="empty">
-            La respuesta del agente aparecerá aquí.
+          <p v-if="!chatMessages.length && !generatedArtifacts.length" class="empty">
+            La conversación del chat seleccionado aparecerá aquí.
           </p>
         </template>
       </section>

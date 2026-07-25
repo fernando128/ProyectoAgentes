@@ -118,6 +118,7 @@ async def _stream_upload_and_ask_response(
             "agent_id": agent_id or None,
             "agent_name": agent_name,
             "agent_version": resolved_version,
+            "title": message.strip().replace("\n", " ")[:80] or "Nuevo chat",
             "vector_store_id": None,
             "files": [],
             "code_files": [],
@@ -125,6 +126,14 @@ async def _stream_upload_and_ask_response(
             "created_at": _utc_now(),
             "updated_at": _utc_now(),
         }
+
+        if (
+            thread_record.get("agent_id")
+            and agent_id
+            and thread_record.get("agent_id") != agent_id
+        ):
+            yield _sse("El thread_id no pertenece al agent_id enviado.", "agent-error")
+            return
 
         existing_code_file_ids = [
             file_record.get("file_id")
@@ -461,6 +470,7 @@ async def _prepare_upload_and_ask_invocation(
             "agent_id": agent_id or None,
             "agent_name": agent_name,
             "agent_version": resolved_version,
+            "title": message.strip().replace("\n", " ")[:80] or "Nuevo chat",
             "vector_store_id": None,
             "files": [],
             "code_files": [],
@@ -468,6 +478,13 @@ async def _prepare_upload_and_ask_invocation(
             "created_at": _utc_now(),
             "updated_at": _utc_now(),
         }
+
+        if (
+            thread_record.get("agent_id")
+            and agent_id
+            and thread_record.get("agent_id") != agent_id
+        ):
+            raise ValueError("El thread_id no pertenece al agent_id enviado.")
 
         existing_code_file_ids = [
             file_record.get("file_id")
@@ -714,6 +731,7 @@ async def _stream_prepared_upload_invocation(
 
             elif event_type == "response.completed":
                 response = getattr(event, "response", None)
+                run_id = getattr(response, "id", None)
                 response_container_id = _find_first_value(response, "container_id")
 
                 if response_container_id:
@@ -757,7 +775,7 @@ async def _stream_prepared_upload_invocation(
                     json.dumps(
                         {
                             "thread_id": thread_id,
-                            "run_id": getattr(response, "id", None),
+                            "run_id": run_id,
                             "archivos_subidos": uploaded_resources,
                             "archivos_thread": thread_resources,
                         },
